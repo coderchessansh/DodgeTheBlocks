@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dodge the Blocks</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    touch-action: none;
+}
+
+body {
+    background: #111;
+    color: white;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+#game {
+    position: relative;
+    width: min(95vw, 420px);
+    height: min(90vh, 700px);
+    background: #181818;
+    border: 3px solid white;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+#player {
+    position: absolute;
+    width: 42px;
+    height: 42px;
+    background: #00e5ff;
+    border-radius: 8px;
+    box-shadow: 0 0 15px #00e5ff;
+}
+
+.block {
+    position: absolute;
+    width: 42px;
+    height: 42px;
+    background: #ff304f;
+    border-radius: 7px;
+    box-shadow: 0 0 12px #ff304f;
+}
+
+#score {
+    position: absolute;
+    top: 12px;
+    left: 15px;
+    font-size: 22px;
+    font-weight: bold;
+    z-index: 10;
+}
+
+#highScore {
+    position: absolute;
+    top: 42px;
+    left: 15px;
+    font-size: 14px;
+    color: #aaa;
+    z-index: 10;
+}
+
+#menu {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.88);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    text-align: center;
+}
+
+#menu h1 {
+    font-size: 38px;
+    margin-bottom: 10px;
+}
+
+#menu p {
+    color: #bbb;
+    margin-bottom: 25px;
+}
+
+button {
+    border: none;
+    background: #00e5ff;
+    color: #000;
+    font-size: 18px;
+    font-weight: bold;
+    padding: 13px 30px;
+    border-radius: 10px;
+}
+
+.controls {
+    position: absolute;
+    bottom: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #555;
+    font-size: 11px;
+    z-index: 5;
+}
+</style>
+</head>
+
+<body>
+
+<div id="game">
+
+    <div id="score">Score: 0</div>
+    <div id="highScore">Best: 0</div>
+
+    <div id="player"></div>
+
+    <div class="controls">
+        PC: W A S D • Mobile: Drag
+    </div>
+
+    <div id="menu">
+        <h1 id="title">DODGE</h1>
+        <p id="message">Dodge the falling blocks!</p>
+        <button onclick="startGame()">START GAME</button>
+    </div>
+
+</div>
+
+<script>
+const game = document.getElementById("game");
+const player = document.getElementById("player");
+const scoreText = document.getElementById("score");
+const highScoreText = document.getElementById("highScore");
+const menu = document.getElementById("menu");
+const title = document.getElementById("title");
+const message = document.getElementById("message");
+
+let playerX = 0;
+let playerY = 0;
+
+let blocks = [];
+let score = 0;
+let speed = 3;
+let gameRunning = false;
+let spawnTimer = 0;
+let lastTime = 0;
+
+let keys = {};
+
+let highScore = Number(localStorage.getItem("dodgeHighScore")) || 0;
+highScoreText.textContent = "Best: " + highScore;
+
+
+// ==========================
+// START GAME
+// ==========================
+
+function startGame() {
+
+    blocks.forEach(block => block.element.remove());
+    blocks = [];
+
+    score = 0;
+    speed = 3;
+    spawnTimer = 0;
+
+    scoreText.textContent = "Score: 0";
+
+    playerX = game.clientWidth / 2 - player.offsetWidth / 2;
+    playerY = game.clientHeight - player.offsetHeight - 30;
+
+    updatePlayer();
+
+    menu.style.display = "none";
+
+    gameRunning = true;
+    lastTime = performance.now();
+
+    requestAnimationFrame(gameLoop);
+}
+
+
+// ==========================
+// PLAYER
+// ==========================
+
+function updatePlayer() {
+    player.style.left = playerX + "px";
+    player.style.top = playerY + "px";
+}
+
+
+// ==========================
+// CREATE BLOCK
+// ==========================
+
+function createBlock() {
+
+    const block = document.createElement("div");
+    block.className = "block";
+
+    const maxX = game.clientWidth - 42;
+    const x = Math.random() * maxX;
+
+    block.style.left = x + "px";
+    block.style.top = "-50px";
+
+    game.appendChild(block);
+
+    blocks.push({
+        element: block,
+        x: x,
+        y: -50
+    });
+}
+
+
+// ==========================
+// GAME LOOP
+// ==========================
+
+function gameLoop(time) {
+
+    if (!gameRunning) return;
+
+    const delta = (time - lastTime) / 16.67;
+    lastTime = time;
+
+    // SCORE
+    score += 0.1 * delta;
+    scoreText.textContent = "Score: " + Math.floor(score);
+
+    // DIFFICULTY
+    speed = 3 + score / 100;
+
+    // ==========================
+    // WASD MOVEMENT
+    // ==========================
+
+    const moveSpeed = 6 * delta;
+
+    if (keys["w"]) {
+        playerY -= moveSpeed;
+    }
+
+    if (keys["s"]) {
+        playerY += moveSpeed;
+    }
+
+    if (keys["a"]) {
+        playerX -= moveSpeed;
+    }
+
+    if (keys["d"]) {
+        playerX += moveSpeed;
+    }
+
+    // Keep player inside game
+    const maxX = game.clientWidth - player.offsetWidth;
+    const maxY = game.clientHeight - player.offsetHeight;
+
+    playerX = Math.max(0, Math.min(playerX, maxX));
+    playerY = Math.max(0, Math.min(playerY, maxY));
+
+    updatePlayer();
+
+
+    // ==========================
+    // SPAWN BLOCKS
+    // ==========================
+
+    spawnTimer += delta;
+
+    const spawnRate = Math.max(18, 45 - score / 4);
+
+    if (spawnTimer > spawnRate) {
+        createBlock();
+        spawnTimer = 0;
+    }
+
+
+    // ==========================
+    // MOVE BLOCKS
+    // ==========================
+
+    for (let i = blocks.length - 1; i >= 0; i--) {
+
+        const block = blocks[i];
+
+        block.y += speed * delta;
+
+        block.element.style.top = block.y + "px";
+
+
+        // COLLISION
+
+        if (collision(player, block.element)) {
+            gameOver();
+            return;
+        }
+
+
+        // REMOVE BLOCK
+
+        if (block.y > game.clientHeight) {
+
+            block.element.remove();
+            blocks.splice(i, 1);
+        }
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+
+// ==========================
+// COLLISION
+// ==========================
+
+function collision(a, b) {
+
+    const aRect = a.getBoundingClientRect();
+    const bRect = b.getBoundingClientRect();
+
+    return (
+        aRect.left < bRect.right &&
+        aRect.right > bRect.left &&
+        aRect.top < bRect.bottom &&
+        aRect.bottom > bRect.top
+    );
+}
+
+
+// ==========================
+// GAME OVER
+// ==========================
+
+function gameOver() {
+
+    gameRunning = false;
+
+    const finalScore = Math.floor(score);
+
+    if (finalScore > highScore) {
+
+        highScore = finalScore;
+
+        localStorage.setItem(
+            "dodgeHighScore",
+            highScore
+        );
+
+        highScoreText.textContent =
+            "Best: " + highScore;
+    }
+
+    title.textContent = "GAME OVER";
+    message.textContent = "Score: " + finalScore;
+
+    menu.querySelector("button").textContent =
+        "PLAY AGAIN";
+
+    menu.style.display = "flex";
+}
+
+
+// ==========================
+// PC KEYBOARD
+// ==========================
+
+document.addEventListener("keydown", e => {
+
+    const key = e.key.toLowerCase();
+
+    if (
+        key === "w" ||
+        key === "a" ||
+        key === "s" ||
+        key === "d"
+    ) {
+        keys[key] = true;
+        e.preventDefault();
+    }
+});
+
+document.addEventListener("keyup", e => {
+
+    const key = e.key.toLowerCase();
+
+    if (
+        key === "w" ||
+        key === "a" ||
+        key === "s" ||
+        key === "d"
+    ) {
+        keys[key] = false;
+        e.preventDefault();
+    }
+});
+
+
+// ==========================
+// MOBILE DRAG
+// ==========================
+
+let dragging = false;
+
+game.addEventListener("pointerdown", e => {
+
+    if (!gameRunning) return;
+
+    dragging = true;
+
+    moveToPointer(e);
+});
+
+game.addEventListener("pointermove", e => {
+
+    if (!dragging || !gameRunning) return;
+
+    moveToPointer(e);
+});
+
+game.addEventListener("pointerup", () => {
+    dragging = false;
+});
+
+game.addEventListener("pointercancel", () => {
+    dragging = false;
+});
+
+
+function moveToPointer(e) {
+
+    const rect = game.getBoundingClientRect();
+
+    playerX =
+        e.clientX -
+        rect.left -
+        player.offsetWidth / 2;
+
+    playerY =
+        e.clientY -
+        rect.top -
+        player.offsetHeight / 2;
+
+    const maxX =
+        game.clientWidth - player.offsetWidth;
+
+    const maxY =
+        game.clientHeight - player.offsetHeight;
+
+    playerX = Math.max(
+        0,
+        Math.min(playerX, maxX)
+    );
+
+    playerY = Math.max(
+        0,
+        Math.min(playerY, maxY)
+    );
+
+    updatePlayer();
+}
+
+</script>
+
+</body>
+</html>
