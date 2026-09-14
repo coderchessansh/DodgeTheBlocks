@@ -2,101 +2,383 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dodge the Blocks</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Dodge Game Ultra</title>
 <style>
-* {
-    box-sizing: border-box;
+  * { box-sizing: border-box; }
+  body {
     margin: 0;
-    padding: 0;
-    touch-action: none;
-}
-
-body {
+    min-height: 100vh;
     background: #111;
     color: white;
     font-family: Arial, sans-serif;
-    overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
-}
+    overflow: hidden;
+    touch-action: none;
+  }
 
-#game {
+  #wrap {
+    width: min(95vw, 850px);
+    text-align: center;
+  }
+
+  h1 { margin: 8px 0; font-size: 30px; }
+
+  #topbar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+
+  .stat {
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 7px 11px;
+    font-weight: bold;
+  }
+
+  button {
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 13px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  #pauseBtn { background: #ffd43b; color: #111; }
+  #modeBtn { background: #4dabf7; color: #111; }
+
+  #game {
     position: relative;
-    width: min(95vw, 420px);
-    height: min(90vh, 700px);
+    width: 100%;
+    height: min(70vh, 600px);
+    min-height: 360px;
     background: #181818;
-    border: 3px solid white;
+    border: 3px solid #555;
     border-radius: 12px;
     overflow: hidden;
-}
+  }
 
-#player {
+  #player {
     position: absolute;
-    width: 42px;
-    height: 42px;
-    background: #00e5ff;
-    border-radius: 8px;
-    box-shadow: 0 0 15px #00e5ff;
-}
-
-.block {
-    position: absolute;
-    width: 42px;
-    height: 42px;
-    background: #ff304f;
+    width: 34px;
+    height: 34px;
+    background: #2196f3;
     border-radius: 7px;
-    box-shadow: 0 0 12px #ff304f;
-}
+    box-shadow: 0 0 16px #2196f3;
+  }
 
-#score {
+  .block {
     position: absolute;
-    top: 12px;
-    left: 15px;
-    font-size: 22px;
-    font-weight: bold;
-    z-index: 10;
-}
+    background: #f44336;
+    border-radius: 6px;
+    box-shadow: 0 0 12px #f44336;
+  }
 
-#highScore {
-    position: absolute;
-    top: 42px;
-    left: 15px;
-    font-size: 14px;
-    color: #aaa;
-    z-index: 10;
-}
-
-#menu {
+  #overlay {
     position: absolute;
     inset: 0;
-    background: rgba(0,0,0,0.88);
-    display: flex;
-    flex-direction: column;
+    display: none;
     justify-content: center;
     align-items: center;
-    z-index: 20;
-    text-align: center;
-}
+    flex-direction: column;
+    background: rgba(0,0,0,.72);
+    z-index: 10;
+  }
 
-#menu h1 {
-    font-size: 38px;
-    margin-bottom: 10px;
-}
+  #overlay.show { display: flex; }
 
-#menu p {
+  #overlay h2 { font-size: 38px; margin: 5px; }
+  #overlay p { margin: 6px; font-size: 18px; }
+
+  #restart {
+    margin-top: 12px;
+    background: #51cf66;
+    color: #111;
+  }
+
+  #help {
+    margin-top: 8px;
     color: #bbb;
-    margin-bottom: 25px;
+    font-size: 14px;
+  }
+
+  @media (max-width: 600px) {
+    h1 { font-size: 25px; }
+    #game { height: 68vh; min-height: 330px; }
+    #player { width: 32px; height: 32px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>🟥 Dodge Game</h1>
+
+  <div id="topbar">
+    <div class="stat">Score: <span id="score">0</span></div>
+    <div class="stat">Best: <span id="best">0</span></div>
+    <div class="stat">Mode: <span id="mode">Mobile</span></div>
+    <button id="pauseBtn">⏸ Pause</button>
+    <button id="modeBtn">🖥 Desktop Mode</button>
+  </div>
+
+  <div id="game">
+    <div id="player"></div>
+
+    <div id="overlay">
+      <h2 id="overlayTitle">PAUSED</h2>
+      <p id="overlayText">Press Resume to continue</p>
+      <button id="restart">▶ Resume</button>
+    </div>
+  </div>
+
+  <div id="help">
+    Mobile Mode: drag the blue cube • Desktop Mode: WASD / Arrow Keys
+  </div>
+</div>
+
+<script>
+const game = document.getElementById("game");
+const player = document.getElementById("player");
+const scoreEl = document.getElementById("score");
+const bestEl = document.getElementById("best");
+const modeEl = document.getElementById("mode");
+const pauseBtn = document.getElementById("pauseBtn");
+const modeBtn = document.getElementById("modeBtn");
+const overlay = document.getElementById("overlay");
+const overlayTitle = document.getElementById("overlayTitle");
+const overlayText = document.getElementById("overlayText");
+const restartBtn = document.getElementById("restart");
+
+let playerX = 100;
+let playerY = 300;
+let playerSize = 34;
+
+let blocks = [];
+let score = 0;
+let best = Number(localStorage.getItem("dodgeBest") || 0);
+let speed = 2.5;
+let spawnTimer = 0;
+let lastTime = 0;
+let paused = false;
+let gameOver = false;
+let desktopMode = false;
+
+const keys = {};
+bestEl.textContent = best;
+
+function clampPlayer() {
+  playerX = Math.max(0, Math.min(game.clientWidth - playerSize, playerX));
+  playerY = Math.max(0, Math.min(game.clientHeight - playerSize, playerY));
 }
 
-button {
-    border: none;
-    background: #00e5ff;
-    color: #000;
-    font-size: 18px;
+function drawPlayer() {
+  player.style.left = playerX + "px";
+  player.style.top = playerY + "px";
+}
+
+function resetGame() {
+  blocks.forEach(b => b.el.remove());
+  blocks = [];
+  score = 0;
+  speed = 2.5;
+  spawnTimer = 0;
+  playerX = game.clientWidth / 2 - playerSize / 2;
+  playerY = game.clientHeight - 70;
+  paused = false;
+  gameOver = false;
+  scoreEl.textContent = "0";
+  pauseBtn.textContent = "⏸ Pause";
+  overlay.classList.remove("show");
+  drawPlayer();
+}
+
+function setMode(desktop) {
+  desktopMode = desktop;
+  modeEl.textContent = desktopMode ? "Desktop" : "Mobile";
+  modeBtn.textContent = desktopMode ? "📱 Mobile Mode" : "🖥 Desktop Mode";
+  paused = true;
+  showPause();
+}
+
+function showPause() {
+  overlayTitle.textContent = "PAUSED";
+  overlayText.textContent = desktopMode
+    ? "Desktop Mode • WASD / Arrow Keys"
+    : "Mobile Mode • Drag the blue cube";
+  restartBtn.textContent = "▶ Resume";
+  overlay.classList.add("show");
+  pauseBtn.textContent = "▶ Resume";
+}
+
+function togglePause() {
+  if (gameOver) return;
+  paused = !paused;
+  if (paused) {
+    showPause();
+  } else {
+    overlay.classList.remove("show");
+    pauseBtn.textContent = "⏸ Pause";
+    lastTime = performance.now();
+  }
+}
+
+function spawnBlock() {
+  const el = document.createElement("div");
+  el.className = "block";
+
+  const size = 25 + Math.random() * 35;
+  const x = Math.random() * (game.clientWidth - size);
+
+  el.style.width = size + "px";
+  el.style.height = size + "px";
+  el.style.left = x + "px";
+  el.style.top = -size + "px";
+
+  game.appendChild(el);
+  blocks.push({ el, x, y: -size, size, speed: speed * (0.8 + Math.random() * 0.7) });
+}
+
+function hit(a, b) {
+  return a.x < b.x + b.size &&
+         a.x + playerSize > b.x &&
+         a.y < b.y + b.size &&
+         a.y + playerSize > b.y;
+}
+
+function endGame() {
+  gameOver = true;
+  paused = true;
+
+  if (score > best) {
+    best = score;
+    localStorage.setItem("dodgeBest", best);
+    bestEl.textContent = best;
+  }
+
+  overlayTitle.textContent = "GAME OVER";
+  overlayText.textContent = "Score: " + score;
+  restartBtn.textContent = "🔄 Restart";
+  overlay.classList.add("show");
+  pauseBtn.textContent = "⏸ Pause";
+}
+
+function update(dt) {
+  if (desktopMode) {
+    const move = 5.5 * dt / 16.67;
+    if (keys["w"] || keys["arrowup"]) playerY -= move;
+    if (keys["s"] || keys["arrowdown"]) playerY += move;
+    if (keys["a"] || keys["arrowleft"]) playerX -= move;
+    if (keys["d"] || keys["arrowright"]) playerX += move;
+    clampPlayer();
+  }
+
+  spawnTimer += dt;
+  const spawnDelay = Math.max(220, 720 - score * 7);
+
+  if (spawnTimer >= spawnDelay) {
+    spawnBlock();
+    spawnTimer = 0;
+  }
+
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i];
+    b.y += b.speed * dt / 16.67;
+    b.el.style.top = b.y + "px";
+
+    if (hit({x: playerX, y: playerY}, b)) {
+      endGame();
+      return;
+    }
+
+    if (b.y > game.clientHeight + b.size) {
+      b.el.remove();
+      blocks.splice(i, 1);
+      score++;
+      scoreEl.textContent = score;
+      speed = Math.min(9, 2.5 + score * 0.045);
+    }
+  }
+}
+
+function loop(time) {
+  const dt = Math.min(40, time - lastTime || 16.67);
+  lastTime = time;
+
+  if (!paused && !gameOver) update(dt);
+  requestAnimationFrame(loop);
+}
+
+// Desktop keyboard controls
+window.addEventListener("keydown", e => {
+  keys[e.key.toLowerCase()] = true;
+  if (["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"," "].includes(e.key.toLowerCase())) {
+    e.preventDefault();
+  }
+  if (e.key === "Escape") togglePause();
+});
+
+window.addEventListener("keyup", e => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+// Mobile drag controls
+let dragging = false;
+
+game.addEventListener("pointerdown", e => {
+  if (desktopMode || paused || gameOver) return;
+  dragging = true;
+  game.setPointerCapture(e.pointerId);
+  movePlayerToPointer(e);
+});
+
+game.addEventListener("pointermove", e => {
+  if (!dragging || desktopMode || paused || gameOver) return;
+  movePlayerToPointer(e);
+});
+
+game.addEventListener("pointerup", () => dragging = false);
+game.addEventListener("pointercancel", () => dragging = false);
+
+function movePlayerToPointer(e) {
+  const rect = game.getBoundingClientRect();
+  playerX = e.clientX - rect.left - playerSize / 2;
+  playerY = e.clientY - rect.top - playerSize / 2;
+  clampPlayer();
+  drawPlayer();
+}
+
+pauseBtn.addEventListener("click", togglePause);
+
+modeBtn.addEventListener("click", () => {
+  setMode(!desktopMode);
+});
+
+restartBtn.addEventListener("click", () => {
+  if (gameOver) {
+    resetGame();
+  } else {
+    togglePause();
+  }
+});
+
+window.addEventListener("resize", () => {
+  clampPlayer();
+  drawPlayer();
+});
+
+resetGame();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>    font-size: 18px;
     font-weight: bold;
     padding: 13px 30px;
     border-radius: 10px;
